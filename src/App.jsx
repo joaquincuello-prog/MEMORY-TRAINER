@@ -1,10 +1,8 @@
-// src/App.jsx
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { useState } from "react";
-import Login from "./pages/Login";
-import Registro from "./pages/Registro";
 import Home from "./pages/home";
-
+import Registro from "./pages/Registro";
+import Login from "./pages/Login";
 
 export default function App() {
   const [usuario, setUsuario] = useState(null);
@@ -12,20 +10,21 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        {/* Página de inicio (si no hay usuario, redirige a login) */}
+        {/* Página principal (solo si hay usuario logueado) */}
         <Route
           path="/"
           element={
-            usuario ? <Home usuario={usuario} /> : <Navigate to="/login" />
+            usuario ? <Home usuario={usuario} /> : <Navigate to="/login" replace />
           }
         />
 
-        {/* Registro */}
+        {/* Página de registro */}
         <Route path="/registro" element={<Registro />} />
 
-        {/* Login */}
+        {/* Página de login */}
         <Route path="/login" element={<Login onLogin={setUsuario} />} />
       </Routes>
     </Router>
   );
 }
+
