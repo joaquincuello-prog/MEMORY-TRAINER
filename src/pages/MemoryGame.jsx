@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // Emojis para las cartas
 const EMOJIS = ['🍎', '🍌', '🍇', '🍊', '🍓', '🍉', '🍒', '🍑'];
@@ -11,6 +12,7 @@ export default function MemoryGame({ usuario, onGameEnd }) {
   const [time, setTime] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
+  const navigate = useNavigate();
 
   // Inicializar el juego
   useEffect(() => {
@@ -271,9 +273,9 @@ export default function MemoryGame({ usuario, onGameEnd }) {
           >
             🔄 Reiniciar Juego
           </button>
-          
+          {/* atento aca, mejorar el boton pra que me lleve al home y no a login */}
           <button
-            onClick={() => window.location.href = '/'}
+            onClick={() => navigate('/')}
             style={{
               flex: 1,
               padding: '15px',

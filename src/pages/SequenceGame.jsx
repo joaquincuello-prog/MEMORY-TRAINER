@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function SequenceGame({ usuario, onGameEnd }) {
   const [sequence, setSequence] = useState([]);
@@ -11,6 +12,7 @@ export default function SequenceGame({ usuario, onGameEnd }) {
   const [activeNumber, setActiveNumber] = useState(null);
   const [message, setMessage] = useState('¡Presiona INICIAR para comenzar!');
   const [time, setTime] = useState(0);
+  const navigate = useNavigate();
 
   const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
@@ -341,7 +343,7 @@ export default function SequenceGame({ usuario, onGameEnd }) {
           )}
           
           <button
-            onClick={() => window.location.href = '/'}
+            onClick={() => navigate('/')}
             style={{
               flex: 1,
               padding: '15px',

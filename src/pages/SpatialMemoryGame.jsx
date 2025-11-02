@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function SpatialMemoryGame({ usuario, onGameEnd }) {
   const [gridSize] = useState(5); // Grid 5x5
@@ -13,6 +14,7 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
   const [time, setTime] = useState(0);
   const [message, setMessage] = useState('¡Presiona INICIAR para comenzar!');
   const [mistakes, setMistakes] = useState(0);
+  const navigate = useNavigate();
 
   const emojis = ['⭐', '💎', '🎯', '🔥', '💫', '🌟', '✨', '🎨'];
 
@@ -438,7 +440,7 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
           )}
           
           <button
-            onClick={() => window.location.href = '/'}
+            onClick={() => navigate('/')}
             style={{
               flex: 1,
               padding: '15px',
