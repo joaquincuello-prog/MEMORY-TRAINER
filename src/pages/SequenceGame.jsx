@@ -1,7 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import TutorialModal from '../components/TutorialModal';
+import LoadingScreen from '../components/LoadingScreen';
+import SoundToggle from '../components/SoundToggle';
+import ConfirmModal from '../components/ConfirmModal';
+import ConfettiEffect from '../components/ConfettiEffect';
+import soundManager from '../utils/soundManager';
 
 export default function SequenceGame({ usuario, onGameEnd }) {
+  const navigate = useNavigate();
+  
+  // Estados del juego
   const [sequence, setSequence] = useState([]);
   const [userSequence, setUserSequence] = useState([]);
   const [level, setLevel] = useState(1);
@@ -12,9 +21,22 @@ export default function SequenceGame({ usuario, onGameEnd }) {
   const [activeNumber, setActiveNumber] = useState(null);
   const [message, setMessage] = useState('¡Presiona INICIAR para comenzar!');
   const [time, setTime] = useState(0);
-  const navigate = useNavigate();
+  
+  // Estados de UI
+  const [showLoading, setShowLoading] = useState(true);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  // Verificar si mostrar tutorial
+  useEffect(() => {
+    const tutorialSeen = localStorage.getItem('tutorial_secuencia_numeros_seen');
+    if (!tutorialSeen) {
+      setTimeout(() => setShowTutorial(true), 500);
+    }
+  }, []);
 
   // Temporizador
   useEffect(() => {
@@ -27,7 +49,15 @@ export default function SequenceGame({ usuario, onGameEnd }) {
     return () => clearInterval(interval);
   }, [gameStarted, gameOver]);
 
+  // Confeti al terminar
+  useEffect(() => {
+    if (gameOver && score > 500) {
+      setShowConfetti(true);
+    }
+  }, [gameOver, score]);
+
   const startGame = () => {
+    soundManager.click();
     setSequence([]);
     setUserSequence([]);
     setLevel(1);
@@ -35,6 +65,7 @@ export default function SequenceGame({ usuario, onGameEnd }) {
     setGameStarted(true);
     setGameOver(false);
     setTime(0);
+    setShowConfetti(false);
     setMessage('Memoriza la secuencia...');
     nextRound([]);
   };
@@ -43,12 +74,10 @@ export default function SequenceGame({ usuario, onGameEnd }) {
     setIsPlaying(true);
     setUserSequence([]);
     
-    // Agregar un nuevo número aleatorio a la secuencia
     const newNumber = numbers[Math.floor(Math.random() * numbers.length)];
     const newSequence = [...currentSequence, newNumber];
     setSequence(newSequence);
     
-    // Mostrar la secuencia con delay
     setTimeout(() => {
       playSequence(newSequence);
     }, 500);
@@ -58,6 +87,7 @@ export default function SequenceGame({ usuario, onGameEnd }) {
     for (let i = 0; i < seq.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 600));
       setActiveNumber(seq[i]);
+      soundManager.playSound(400 + seq[i] * 50, 0.2, 'sine');
       await new Promise(resolve => setTimeout(resolve, 400));
       setActiveNumber(null);
     }
@@ -68,18 +98,17 @@ export default function SequenceGame({ usuario, onGameEnd }) {
   const handleNumberClick = (number) => {
     if (isPlaying || gameOver) return;
 
+    soundManager.click();
     const newUserSequence = [...userSequence, number];
     setUserSequence(newUserSequence);
 
-    // Efecto visual de click
     setActiveNumber(number);
     setTimeout(() => setActiveNumber(null), 200);
 
-    // Verificar si el número es correcto
     const currentIndex = newUserSequence.length - 1;
     
     if (newUserSequence[currentIndex] !== sequence[currentIndex]) {
-      // Error - Fin del juego
+      soundManager.error();
       setGameOver(true);
       setGameStarted(false);
       setMessage('¡Secuencia incorrecta! Juego terminado');
@@ -87,12 +116,16 @@ export default function SequenceGame({ usuario, onGameEnd }) {
       return;
     }
 
-    // Si completó la secuencia correctamente
     if (newUserSequence.length === sequence.length) {
+      soundManager.success();
       const newScore = score + (level * 100);
       setScore(newScore);
       setLevel(level + 1);
       setMessage('¡Correcto! Preparando siguiente nivel...');
+      
+      if (level % 5 === 0) {
+        soundManager.levelUp();
+      }
       
       setTimeout(() => {
         nextRound(sequence);
@@ -101,6 +134,10 @@ export default function SequenceGame({ usuario, onGameEnd }) {
   };
 
   const handleGameEnd = async () => {
+    if (score > 300) {
+      soundManager.victory();
+    }
+    
     try {
       await fetch('http://localhost:3001/partidas', {
         method: 'POST',
@@ -120,11 +157,34 @@ export default function SequenceGame({ usuario, onGameEnd }) {
     }
   };
 
+  const handleExitClick = () => {
+    if (gameStarted && !gameOver && score > 0) {
+      setShowExitModal(true);
+    } else {
+      navigate('/');
+    }
+  };
+
+  const confirmExit = () => {
+    soundManager.click();
+    navigate('/');
+  };
+
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  if (showLoading) {
+    return (
+      <LoadingScreen
+        gameIcon="🔢"
+        gameName="Secuencia de Números"
+        onLoadComplete={() => setShowLoading(false)}
+      />
+    );
+  }
 
   return (
     <div style={{
@@ -135,10 +195,30 @@ export default function SequenceGame({ usuario, onGameEnd }) {
       flexDirection: 'column',
       alignItems: 'center'
     }}>
-      <div style={{
-        maxWidth: '600px',
-        width: '100%'
-      }}>
+      <SoundToggle />
+      <ConfettiEffect active={showConfetti} />
+      
+      <button
+        onClick={() => setShowTutorial(true)}
+        style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          background: 'rgba(255,255,255,0.9)',
+          border: 'none',
+          borderRadius: '50%',
+          width: '50px',
+          height: '50px',
+          fontSize: '24px',
+          cursor: 'pointer',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          zIndex: 100
+        }}
+      >
+        ❓
+      </button>
+
+      <div style={{ maxWidth: '600px', width: '100%' }}>
         {/* Header */}
         <div style={{
           background: 'rgba(255,255,255,0.95)',
@@ -343,7 +423,7 @@ export default function SequenceGame({ usuario, onGameEnd }) {
           )}
           
           <button
-            onClick={() => navigate('/')}
+            onClick={handleExitClick}
             style={{
               flex: 1,
               padding: '15px',
@@ -420,7 +500,7 @@ export default function SequenceGame({ usuario, onGameEnd }) {
                   Jugar de nuevo
                 </button>
                 <button
-                  onClick={() => window.location.href = '/'}
+                  onClick={() => navigate('/')}
                   style={{
                     flex: 1,
                     padding: '15px',
@@ -440,6 +520,21 @@ export default function SequenceGame({ usuario, onGameEnd }) {
           </div>
         )}
       </div>
+
+      {showTutorial && (
+        <TutorialModal
+          gameType="secuencia_numeros"
+          onClose={() => setShowTutorial(false)}
+        />
+      )}
+
+      <ConfirmModal
+        show={showExitModal}
+        title="¿Salir del juego?"
+        message="Perderás el progreso de esta partida"
+        onConfirm={confirmExit}
+        onCancel={() => setShowExitModal(false)}
+      />
     </div>
   );
 }

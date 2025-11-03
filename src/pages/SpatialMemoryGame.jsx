@@ -1,22 +1,44 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import TutorialModal from '../components/TutorialModal';
+import LoadingScreen from '../components/LoadingScreen';
+import SoundToggle from '../components/SoundToggle';
+import ConfirmModal from '../components/ConfirmModal';
+import ConfettiEffect from '../components/ConfettiEffect';
+import soundManager from '../utils/soundManager';
 
 export default function SpatialMemoryGame({ usuario, onGameEnd }) {
-  const [gridSize] = useState(5); // Grid 5x5
+  const navigate = useNavigate();
+  
+  // Estados del juego
+  const [gridSize] = useState(5);
   const [level, setLevel] = useState(1);
   const [score, setScore] = useState(0);
   const [targetPositions, setTargetPositions] = useState([]);
   const [userSelections, setUserSelections] = useState([]);
   const [showTargets, setShowTargets] = useState(false);
-  const [gamePhase, setGamePhase] = useState('start'); // start, memorize, recall, result
+  const [gamePhase, setGamePhase] = useState('start');
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [time, setTime] = useState(0);
   const [message, setMessage] = useState('¡Presiona INICIAR para comenzar!');
   const [mistakes, setMistakes] = useState(0);
-  const navigate = useNavigate();
+  
+  // Estados de UI
+  const [showLoading, setShowLoading] = useState(true);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const emojis = ['⭐', '💎', '🎯', '🔥', '💫', '🌟', '✨', '🎨'];
+
+  // Verificar si mostrar tutorial
+  useEffect(() => {
+    const tutorialSeen = localStorage.getItem('tutorial_memoria_espacial_seen');
+    if (!tutorialSeen) {
+      setTimeout(() => setShowTutorial(true), 500);
+    }
+  }, []);
 
   // Temporizador
   useEffect(() => {
@@ -29,13 +51,22 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
     return () => clearInterval(interval);
   }, [gameStarted, gameOver]);
 
+  // Confeti al terminar con buen puntaje
+  useEffect(() => {
+    if (gameOver && score > 500) {
+      setShowConfetti(true);
+    }
+  }, [gameOver, score]);
+
   const startGame = () => {
+    soundManager.click();
     setLevel(1);
     setScore(0);
     setMistakes(0);
     setTime(0);
     setGameStarted(true);
     setGameOver(false);
+    setShowConfetti(false);
     startNewRound(1);
   };
 
@@ -44,7 +75,6 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
     setGamePhase('memorize');
     setMessage('¡Memoriza las posiciones!');
     
-    // Generar posiciones aleatorias (cantidad aumenta con el nivel)
     const numTargets = Math.min(2 + currentLevel, 10);
     const positions = [];
     
@@ -57,33 +87,32 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
     
     setTargetPositions(positions);
     setShowTargets(true);
+    soundManager.playSound(600, 0.3, 'sine');
 
-    // Ocultar después de 3 segundos (menos tiempo en niveles altos)
     const memoryTime = Math.max(2000, 4000 - (currentLevel * 100));
     setTimeout(() => {
       setShowTargets(false);
       setGamePhase('recall');
       setMessage('¡Selecciona las posiciones que recuerdas!');
+      soundManager.playSound(400, 0.2, 'sine');
     }, memoryTime);
   };
 
   const handleCellClick = (index) => {
     if (gamePhase !== 'recall' || gameOver) return;
 
-    // No permitir seleccionar la misma celda dos veces
     if (userSelections.includes(index)) return;
 
+    soundManager.click();
     const newSelections = [...userSelections, index];
     setUserSelections(newSelections);
 
-    // Verificar si la selección es correcta
     if (!targetPositions.includes(index)) {
-      // Error
+      soundManager.error();
       const newMistakes = mistakes + 1;
       setMistakes(newMistakes);
       
       if (newMistakes >= 3) {
-        // Game Over
         setGameOver(true);
         setGameStarted(false);
         setGamePhase('result');
@@ -91,16 +120,16 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
         handleGameEnd();
         return;
       }
+    } else {
+      soundManager.playSound(700, 0.1, 'sine');
     }
 
-    // Verificar si completó el nivel
     if (newSelections.length === targetPositions.length) {
       checkRoundCompletion(newSelections);
     }
   };
 
   const checkRoundCompletion = (selections) => {
-    // Contar aciertos
     const correctSelections = selections.filter(sel => 
       targetPositions.includes(sel)
     ).length;
@@ -108,19 +137,23 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
     const accuracy = (correctSelections / targetPositions.length) * 100;
 
     if (accuracy >= 80) {
-      // ¡Nivel completado!
+      soundManager.success();
       const levelScore = level * 150;
       setScore(score + levelScore);
       setLevel(level + 1);
       setGamePhase('result');
       setMessage('¡Excelente! Siguiente nivel...');
-      setShowTargets(true); // Mostrar respuestas correctas
+      setShowTargets(true);
+
+      if (level % 3 === 0) {
+        soundManager.levelUp();
+      }
 
       setTimeout(() => {
         startNewRound(level + 1);
       }, 2000);
     } else {
-      // No completó el nivel
+      soundManager.error();
       setGameOver(true);
       setGameStarted(false);
       setGamePhase('result');
@@ -131,6 +164,10 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
   };
 
   const handleGameEnd = async () => {
+    if (score > 300) {
+      soundManager.victory();
+    }
+    
     try {
       await fetch('http://localhost:3001/partidas', {
         method: 'POST',
@@ -148,6 +185,19 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
     } catch (error) {
       console.error('Error al guardar partida:', error);
     }
+  };
+
+  const handleExitClick = () => {
+    if (gameStarted && !gameOver && score > 0) {
+      setShowExitModal(true);
+    } else {
+      navigate('/');
+    }
+  };
+
+  const confirmExit = () => {
+    soundManager.click();
+    navigate('/');
   };
 
   const formatTime = (seconds) => {
@@ -224,6 +274,16 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
     }
   };
 
+  if (showLoading) {
+    return (
+      <LoadingScreen
+        gameIcon="🧩"
+        gameName="Memoria Espacial"
+        onLoadComplete={() => setShowLoading(false)}
+      />
+    );
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -233,10 +293,30 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
       flexDirection: 'column',
       alignItems: 'center'
     }}>
-      <div style={{
-        maxWidth: '700px',
-        width: '100%'
-      }}>
+      <SoundToggle />
+      <ConfettiEffect active={showConfetti} />
+      
+      <button
+        onClick={() => setShowTutorial(true)}
+        style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          background: 'rgba(255,255,255,0.9)',
+          border: 'none',
+          borderRadius: '50%',
+          width: '50px',
+          height: '50px',
+          fontSize: '24px',
+          cursor: 'pointer',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          zIndex: 100
+        }}
+      >
+        ❓
+      </button>
+
+      <div style={{ maxWidth: '700px', width: '100%' }}>
         {/* Header */}
         <div style={{
           background: 'rgba(255,255,255,0.95)',
@@ -440,7 +520,7 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
           )}
           
           <button
-            onClick={() => navigate('/')}
+            onClick={handleExitClick}
             style={{
               flex: 1,
               padding: '15px',
@@ -517,7 +597,7 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
                   Jugar de nuevo
                 </button>
                 <button
-                  onClick={() => window.location.href = '/'}
+                  onClick={() => navigate('/')}
                   style={{
                     flex: 1,
                     padding: '15px',
@@ -537,6 +617,21 @@ export default function SpatialMemoryGame({ usuario, onGameEnd }) {
           </div>
         )}
       </div>
+
+      {showTutorial && (
+        <TutorialModal
+          gameType="memoria_espacial"
+          onClose={() => setShowTutorial(false)}
+        />
+      )}
+
+      <ConfirmModal
+        show={showExitModal}
+        title="¿Salir del juego?"
+        message="Perderás el progreso de esta partida"
+        onConfirm={confirmExit}
+        onCancel={() => setShowExitModal(false)}
+      />
     </div>
   );
 }
